@@ -14,14 +14,36 @@ export default function App() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [warnings, setWarnings] = useState([]);
 
   // エントリが変わるたびにローカルストレージへ保存
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   }, [entries]);
 
-  // レシート解析結果を一意なIDと登録日時を付与して追加
+  // レシート解析結果を検証してから登録する
   const handleReceiptParsed = (data) => {
+    const newWarnings = [];
+
+    // 負の金額を持つ商品をチェック
+    const negativeItems = (data.items || []).filter((item) => item.price < 0);
+    if (negativeItems.length > 0) {
+      const names = negativeItems.map((i) => i.name).join('、');
+      newWarnings.push(`金額が負の値の商品があります: ${names}`);
+    }
+
+    // 同一日付・同一合計金額の重複チェック
+    const isDuplicate = entries.some(
+      (e) => e.date === data.date && e.total === data.total
+    );
+    if (isDuplicate) {
+      newWarnings.push(
+        `同じ日付（${data.date}）・合計金額（¥${data.total?.toLocaleString()}）のレシートが既に登録されています`
+      );
+    }
+
+    setWarnings(newWarnings);
+
     const entry = {
       ...data,
       id: crypto.randomUUID(),
@@ -45,6 +67,22 @@ export default function App() {
         error={error}
         setError={setError}
       />
+
+      {warnings.length > 0 && (
+        <div className="warnings">
+          {warnings.map((msg, i) => (
+            <div key={i} className="warning-item">
+              <span>⚠ {msg}</span>
+              <button
+                className="warning-close"
+                onClick={() => setWarnings((prev) => prev.filter((_, j) => j !== i))}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {entries.length > 0 && (
         <>
